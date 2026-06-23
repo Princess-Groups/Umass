@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Download, Search } from "lucide-react";
+import { Plus, Download, Search, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { fmtCurrency, fmtDate, downloadCSV } from "@/lib/format";
 
@@ -25,6 +25,7 @@ function InvoicesPage() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
@@ -95,10 +96,11 @@ function InvoicesPage() {
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Paid</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((i) => (
+              {filtered.map((i: any) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-mono text-xs">{i.invoice_number}</TableCell>
                   <TableCell>
@@ -121,16 +123,76 @@ function InvoicesPage() {
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => setEditingId(i.id)}
+                      className="p-1 hover:bg-muted rounded-md transition-colors"
+                      title="Edit invoice"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No invoices yet. Create your first one.</TableCell></TableRow>
-              )}
             </TableBody>
           </Table>
         </div>
       </Card>
+
+      {editingId && (
+        <EditInvoiceDialog
+          invoices={invoices}
+          editingId={editingId}
+          qc={qc}
+          onDone={() => setEditingId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function EditInvoiceDialog({ invoices, editingId, qc, onDone }: {
+  invoices: any[]; editingId: string; qc: any; onDone: () => void;
+}) {
+  const invoice = invoices.find((i) => i.id === editingId);
+  const [form, setForm] = useState({
+    refixing_due_date: invoice?.refixing_due_date?.slice(0, 10) ?? "",
+  });
+
+  useEffect(() => {
+    if (invoice) {
+      setForm({ refixing_due_date: invoice.refixing_due_date?.slice(0, 10) ?? "" });
+    }
+  }, [invoice]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("invoices").update({
+        refixing_due_date: form.refixing_due_date || null,
+      }).eq("id", editingId);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Refixing date updated"); onDone(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={true} onOpenChange={(v) => !v && onDone()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle className="font-display text-2xl">Edit Refixing Date</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Client: <strong>{invoice?.client_name}</strong></p>
+          <Field label="Next session (refixing due date)">
+            <Input type="date" value={form.refixing_due_date} onChange={(e) => setForm({ ...form, refixing_due_date: e.target.value })} />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => save.mutate()} disabled={save.isPending} className="rounded-full">
+            {save.isPending ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

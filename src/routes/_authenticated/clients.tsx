@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Phone, Mail, MapPin, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 
@@ -19,6 +19,7 @@ function ClientsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", mobile: "", email: "", address: "", notes: "" });
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
@@ -43,6 +44,24 @@ function ClientsPage() {
       setForm({ name: "", mobile: "", email: "", address: "", notes: "" });
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sendReminder = useMutation({
+    mutationFn: async () => {
+      // Send all reminders from the bell icon
+      const { sendAllReminders } = await import("@/lib/api/reminders.server");
+      const data = await sendAllReminders();
+      if (!data.success) throw new Error(data.error || "Failed");
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Sent ${data.sent} reminder(s)`);
+      setSendingReminderId(null);
+    },
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setSendingReminderId(null);
+    },
   });
 
   return (
@@ -85,6 +104,7 @@ function ClientsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Address</TableHead>
               <TableHead>Notes</TableHead>
+              <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -102,9 +122,22 @@ function ClientsPage() {
                   ) : <span className="text-muted-foreground/60">—</span>}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{c.notes}</TableCell>
+                <TableCell>
+                  <button
+                    onClick={() => {
+                      setSendingReminderId(c.id);
+                      sendReminder.mutate();
+                    }}
+                    disabled={sendReminder.isPending && sendingReminderId === c.id}
+                    className="p-1 hover:bg-muted rounded-md transition-colors disabled:opacity-50"
+                    title="Send WhatsApp reminders"
+                  >
+                    <Bell className="w-4 h-4" />
+                  </button>
+                </TableCell>
               </TableRow>
             ))}
-            {!clients.length && <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">No clients yet.</TableCell></TableRow>}
+            {!clients.length && <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No clients yet.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </Card>
