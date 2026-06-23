@@ -79,7 +79,7 @@ export function formatReminderMessage(
   });
 
   if (isForOwner) {
-    return `📅 Appointment Reminder\n\nClient: ${clientName}\nDate: ${date}\nDays until: ${daysUntil}\n\nPlease prepare for the session.`;
+    return `📅 Upcoming Appointment\n\nClient: ${clientName}\nDate: ${date}\nDays until: ${daysUntil}\n\nPlease prepare for the session accordingly.`;
   }
 
   return `Hi ${clientName},\n\n📅 Your hair replacement appointment is scheduled for ${date} (in ${daysUntil} days).\n\nPlease confirm if you're still available or let us know if you need to reschedule.\n\nThank you!`;

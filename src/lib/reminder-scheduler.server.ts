@@ -12,7 +12,7 @@ const DEFAULT_CONFIG: ReminderConfig = {
   ownerReminderDays: [7, 1], // Remind owner 7 days and 1 day before
 };
 
-export async function checkAndSendReminders(config: ReminderConfig = DEFAULT_CONFIG) {
+export async function checkAndSendReminders(config: ReminderConfig = DEFAULT_CONFIG, forceSend = false) {
   try {
     const config_srv = getServerConfig();
     if (!config_srv.whatsappApiKey) {
@@ -54,71 +54,44 @@ export async function checkAndSendReminders(config: ReminderConfig = DEFAULT_CON
       const dueDate = new Date(appointment.refixing_due_date);
       const daysUntil = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
+      // Force send: send one reminder per appointment (for manual trigger)
+      if (forceSend) {
+        // Send to client
+        const clientMsg = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, false);
+        const ok1 = await sendWhatsAppMessage({ phone: appointment.mobile, message: clientMsg });
+        if (ok1) { await logReminderSent(appointment.id, 'client', daysUntil); sent++; } else errors++;
+
+        // Send to owner
+        const ownerMsg = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, true);
+        const ok2 = await sendWhatsAppMessage({ phone: ownerPhone, message: ownerMsg });
+        if (ok2) { await logReminderSent(appointment.id, 'owner', daysUntil); sent++; } else errors++;
+        continue;
+      }
+
+      // Auto mode: send only when exact day matches (for cron job)
       // Check client reminders
       for (const reminderDay of config.clientReminderDays) {
         if (daysUntil === reminderDay) {
-          const isAlreadySent = await checkReminderSent(
-            appointment.id,
-            'client',
-            reminderDay
-          );
+          const isAlreadySent = await checkReminderSent(appointment.id, 'client', reminderDay);
+          if (isAlreadySent) continue;
 
-          if (!isAlreadySent) {
-            const message = formatReminderMessage(
-              appointment.client_name,
-              appointment.refixing_due_date,
-              daysUntil,
-              false
-            );
-
-            const success = await sendWhatsAppMessage({
-              phone: appointment.mobile,
-              message,
-              clientName: appointment.client_name,
-              appointmentDate: appointment.refixing_due_date,
-            });
-
-            if (success) {
-              await logReminderSent(appointment.id, 'client', reminderDay);
-              sent++;
-            } else {
-              errors++;
-            }
-          }
+          const message = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, false);
+          const success = await sendWhatsAppMessage({ phone: appointment.mobile, message });
+          if (success) { await logReminderSent(appointment.id, 'client', reminderDay); sent++; }
+          else { errors++; }
         }
       }
 
       // Check owner reminders
       for (const reminderDay of config.ownerReminderDays) {
         if (daysUntil === reminderDay) {
-          const isAlreadySent = await checkReminderSent(
-            appointment.id,
-            'owner',
-            reminderDay
-          );
+          const isAlreadySent = await checkReminderSent(appointment.id, 'owner', reminderDay);
+          if (isAlreadySent) continue;
 
-          if (!isAlreadySent) {
-            const message = formatReminderMessage(
-              appointment.client_name,
-              appointment.refixing_due_date,
-              daysUntil,
-              true
-            );
-
-            const success = await sendWhatsAppMessage({
-              phone: ownerPhone,
-              message,
-              clientName: appointment.client_name,
-              appointmentDate: appointment.refixing_due_date,
-            });
-
-            if (success) {
-              await logReminderSent(appointment.id, 'owner', reminderDay);
-              sent++;
-            } else {
-              errors++;
-            }
-          }
+          const message = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, true);
+          const success = await sendWhatsAppMessage({ phone: ownerPhone, message });
+          if (success) { await logReminderSent(appointment.id, 'owner', reminderDay); sent++; }
+          else { errors++; }
         }
       }
     }

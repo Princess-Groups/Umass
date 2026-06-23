@@ -37,9 +37,13 @@ function SettingsPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!data) return;
-      const { error } = await supabase.from("business_settings").update(form).eq("id", data.id);
-      if (error) throw error;
+      if (data) {
+        const { error } = await supabase.from("business_settings").update(form).eq("id", data.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("business_settings").insert(form);
+        if (error) throw error;
+      }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["settings"] }); toast.success("Settings saved"); },
     onError: (e: Error) => toast.error(e.message),

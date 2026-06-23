@@ -6,7 +6,7 @@ import { getServerConfig } from "../config.server";
 export const sendAllReminders = createServerFn({ method: "POST" })
   .handler(async () => {
     try {
-      const result = await checkAndSendReminders();
+      const result = await checkAndSendReminders(undefined, true);
       return { success: true, sent: result.sent, errors: result.errors };
     } catch (error) {
       console.error("Reminder error:", error);
