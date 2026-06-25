@@ -26,7 +26,7 @@ export const sendTestMessage = createServerFn({ method: "POST" })
 export const sendClientReminder = createServerFn({ method: "POST" })
   .handler(async (data: { clientId: string; clientName: string; clientPhone: string }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { formatReminderMessage } = await import("../whatsapp.server");
+    // no extra import needed
     const config = getServerConfig();
     if (!config.whatsappApiKey) return { success: false, error: "WhatsApp not configured" };
 
@@ -49,11 +49,16 @@ export const sendClientReminder = createServerFn({ method: "POST" })
     let sent = 0;
     for (const inv of invoices) {
       const dueDate = new Date(inv.refixing_due_date);
-      const daysUntil = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      const clientMsg = formatReminderMessage(data.clientName, inv.refixing_due_date, daysUntil, false);
-      const ownerMsg = formatReminderMessage(data.clientName, inv.refixing_due_date, daysUntil, true);
-      const ok1 = await sendWhatsAppMessage({ phone: data.clientPhone, message: clientMsg });
-      const ok2 = await sendWhatsAppMessage({ phone: ownerPhone, message: ownerMsg });
+      const ok1 = await sendWhatsAppMessage({
+        phone: data.clientPhone,
+        clientName: data.clientName,
+        appointmentDate: inv.refixing_due_date,
+      });
+      const ok2 = await sendWhatsAppMessage({
+        phone: ownerPhone,
+        clientName: data.clientName,
+        appointmentDate: inv.refixing_due_date,
+      });
       if (ok1 || ok2) sent++;
     }
     return { success: true, sent, total: invoices.length };

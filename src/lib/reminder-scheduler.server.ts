@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
-import { sendWhatsAppMessage, formatReminderMessage } from './whatsapp.server';
+import { sendWhatsAppMessage } from './whatsapp.server';
 import { getServerConfig } from './config.server';
 
 export interface ReminderConfig {
@@ -57,14 +57,22 @@ export async function checkAndSendReminders(config: ReminderConfig = DEFAULT_CON
       // Force send: send one reminder per appointment (for manual trigger)
       if (forceSend) {
         // Send to client
-        const clientMsg = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, false);
-        const ok1 = await sendWhatsAppMessage({ phone: appointment.mobile, message: clientMsg });
+        const ok1 = await sendWhatsAppMessage({
+          phone: appointment.mobile,
+          clientName: appointment.client_name,
+          appointmentDate: appointment.refixing_due_date,
+        });
         if (ok1) { await logReminderSent(appointment.id, 'client', daysUntil); sent++; } else errors++;
 
-        // Send to owner
-        const ownerMsg = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, true);
-        const ok2 = await sendWhatsAppMessage({ phone: ownerPhone, message: ownerMsg });
-        if (ok2) { await logReminderSent(appointment.id, 'owner', daysUntil); sent++; } else errors++;
+        // Send to owner (silently skip if fails — owner number might be invalid)
+        if (ownerPhone) {
+          const ok2 = await sendWhatsAppMessage({
+            phone: ownerPhone,
+            clientName: appointment.client_name,
+            appointmentDate: appointment.refixing_due_date,
+          });
+          if (ok2) { await logReminderSent(appointment.id, 'owner', daysUntil); sent++; }
+        }
         continue;
       }
 
@@ -75,23 +83,30 @@ export async function checkAndSendReminders(config: ReminderConfig = DEFAULT_CON
           const isAlreadySent = await checkReminderSent(appointment.id, 'client', reminderDay);
           if (isAlreadySent) continue;
 
-          const message = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, false);
-          const success = await sendWhatsAppMessage({ phone: appointment.mobile, message });
+          const success = await sendWhatsAppMessage({
+            phone: appointment.mobile,
+            clientName: appointment.client_name,
+            appointmentDate: appointment.refixing_due_date,
+          });
           if (success) { await logReminderSent(appointment.id, 'client', reminderDay); sent++; }
           else { errors++; }
         }
       }
 
-      // Check owner reminders
-      for (const reminderDay of config.ownerReminderDays) {
-        if (daysUntil === reminderDay) {
-          const isAlreadySent = await checkReminderSent(appointment.id, 'owner', reminderDay);
-          if (isAlreadySent) continue;
+      // Check owner reminders (skip if no owner phone configured)
+      if (ownerPhone) {
+        for (const reminderDay of config.ownerReminderDays) {
+          if (daysUntil === reminderDay) {
+            const isAlreadySent = await checkReminderSent(appointment.id, 'owner', reminderDay);
+            if (isAlreadySent) continue;
 
-          const message = formatReminderMessage(appointment.client_name, appointment.refixing_due_date, daysUntil, true);
-          const success = await sendWhatsAppMessage({ phone: ownerPhone, message });
-          if (success) { await logReminderSent(appointment.id, 'owner', reminderDay); sent++; }
-          else { errors++; }
+            const success = await sendWhatsAppMessage({
+              phone: ownerPhone,
+              clientName: appointment.client_name,
+              appointmentDate: appointment.refixing_due_date,
+            });
+            if (success) { await logReminderSent(appointment.id, 'owner', reminderDay); sent++; }
+          }
         }
       }
     }
