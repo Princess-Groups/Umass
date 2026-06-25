@@ -17,7 +17,7 @@ export const sendAllReminders = createServerFn({ method: "POST" })
 export const sendTestMessage = createServerFn({ method: "POST" })
   .handler(async () => {
     const config = getServerConfig();
-    const ownerNumber = "919849308993";
+    const ownerNumber = "919159250079";
     const message = "🧪 Test message — WhatsApp is working!";
     const ok = await sendWhatsAppMessage({ phone: ownerNumber, message });
     return { success: ok, message: ok ? "Message sent!" : "Failed" };
