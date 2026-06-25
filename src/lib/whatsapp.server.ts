@@ -1,25 +1,14 @@
 import { getServerConfig } from './config.server';
 
-export interface WhatsAppMessage {
-  phone: string;
-  message: string;
-  clientName?: string;
-  appointmentDate?: string;
-}
-
-export interface TemplateMessage {
-  phone: string;
-  clientName: string;
-  appointmentDate: string;
-  daysUntil: number;
-  isForOwner?: boolean;
-}
-
-export async function sendWhatsAppTemplate({
+export async function sendWhatsAppMessage({
   phone,
   clientName,
   appointmentDate,
-}: TemplateMessage): Promise<boolean> {
+}: {
+  phone: string;
+  clientName?: string;
+  appointmentDate?: string;
+}): Promise<boolean> {
   const config = getServerConfig();
   const apiKey = config.whatsappApiKey;
   const phoneNumberId = config.whatsappPhoneNumberId;
@@ -29,18 +18,14 @@ export async function sendWhatsAppTemplate({
     return false;
   }
 
-  let formattedPhone = phone.replace(/\D/g, '');
-  if (!formattedPhone.startsWith('91')) {
-    formattedPhone = formattedPhone.startsWith('0')
-      ? '91' + formattedPhone.slice(1)
-      : '91' + formattedPhone;
-  }
-
+  const formattedPhone = phone.replace(/\D/g, '').replace(/^0/, '91');
   const cleanKey = apiKey.replace(/^["']|["']$/g, '').trim();
-  const date = new Date(appointmentDate).toLocaleDateString('en-IN', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
-  const msg = `Hi ${clientName}, your hair replacement appointment is scheduled for ${date}. Please confirm if available. Thank you!`;
+
+  const name = clientName || 'Client';
+  const date = appointmentDate
+    ? new Date(appointmentDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'soon';
+  const msg = `Hi ${name},\n\n📅 Your hair replacement appointment is scheduled for ${date}.\n\nPlease confirm if you're still available or let us know if you need to reschedule.\n\nThank you!`;
 
   try {
     const response = await fetch(
@@ -73,20 +58,6 @@ export async function sendWhatsAppTemplate({
     console.error('Failed to send WhatsApp message:', error);
     return false;
   }
-}
-
-export async function sendWhatsAppMessage({
-  phone,
-  message,
-}: WhatsAppMessage): Promise<boolean> {
-  // This function is kept for backwards compatibility
-  // Template-based sending is used instead
-  return sendWhatsAppTemplate({
-    phone,
-    clientName: message || 'Client',
-    appointmentDate: new Date().toISOString(),
-    daysUntil: 0,
-  });
 }
 
 export function formatReminderMessage(
